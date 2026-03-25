@@ -10,23 +10,43 @@ export default function App() {
   const [unreadCount, setUnreadCount] = useState(0)
   const [showNotifications, setShowNotifications] = useState(false)
 
-  // Load cart items from chrome.storage on mount
+  // Load cart items from chrome.storage on mount and listen for changes
   useEffect(() => {
-    if (typeof chrome !== 'undefined' && chrome.storage) {
-      chrome.storage.local.get(['cartItems', 'notifications'], (result) => {
-        if (result.cartItems) setCartItems(result.cartItems)
-        if (result.notifications) {
-          setNotifications(result.notifications)
-          setUnreadCount(result.notifications.filter(n => !n.read).length)
-        }
-      })
+    if (typeof chrome === 'undefined' || !chrome.storage) return
 
-      // Listen for updates from content script
-      chrome.runtime.onMessage.addListener((message) => {
-        if (message.type === 'CART_UPDATED') {
-          setCartItems(message.items)
-        }
-      })
+    // Initial load
+    chrome.storage.local.get(['cartItems', 'notifications'], (result) => {
+      if (result.cartItems) setCartItems(result.cartItems)
+      if (result.notifications) {
+        setNotifications(result.notifications)
+        setUnreadCount(result.notifications.filter(n => !n.read).length)
+      }
+    })
+
+    // Listen for runtime messages (direct push from service worker)
+    function onMessage(message) {
+      if (message.type === 'CART_UPDATED') {
+        setCartItems(message.items)
+      }
+    }
+    chrome.runtime.onMessage.addListener(onMessage)
+
+    // Listen for storage changes (catches updates even if runtime message is missed)
+    function onStorageChanged(changes) {
+      if (changes.cartItems) {
+        setCartItems(changes.cartItems.newValue || [])
+      }
+      if (changes.notifications) {
+        const updated = changes.notifications.newValue || []
+        setNotifications(updated)
+        setUnreadCount(updated.filter(n => !n.read).length)
+      }
+    }
+    chrome.storage.onChanged.addListener(onStorageChanged)
+
+    return () => {
+      chrome.runtime.onMessage.removeListener(onMessage)
+      chrome.storage.onChanged.removeListener(onStorageChanged)
     }
   }, [])
 

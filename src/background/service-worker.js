@@ -15,7 +15,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   return true
 })
 
-async function handleCartUpdate({ retailer, items, timestamp }) {
+async function handleCartUpdate({ retailer, items, isFullCart, timestamp }) {
   // Load existing cart items
   const stored = await chrome.storage.local.get('cartItems')
   const existing = stored.cartItems || []
@@ -31,9 +31,17 @@ async function handleCartUpdate({ retailer, items, timestamp }) {
     savedAt: timestamp,
   }))
 
-  // Merge: keep existing items from other retailers, replace items from this retailer
-  const otherRetailerItems = existing.filter(i => i.retailer !== retailer)
-  const merged = [...otherRetailerItems, ...categorised]
+  let merged
+  if (isFullCart) {
+    // Bag page: replace all items from this retailer (full snapshot)
+    const otherRetailerItems = existing.filter(i => i.retailer !== retailer)
+    merged = [...otherRetailerItems, ...categorised]
+  } else {
+    // Product page: add new items without removing existing ones from this retailer
+    const existingIds = new Set(existing.map(i => i.id))
+    const newItems = categorised.filter(i => !existingIds.has(i.id))
+    merged = [...existing, ...newItems]
+  }
 
   await chrome.storage.local.set({ cartItems: merged })
 
@@ -56,11 +64,12 @@ function generateId(item) {
 function guessCategory(name) {
   const n = name.toLowerCase()
   if (/boot|heel|shoe|mule|sneaker|loafer|sandal|flat|pump/.test(n)) return 'Shoes'
-  if (/dress|gown|mini|midi|maxi/.test(n)) return 'Dresses'
+  if (/dress|gown|mini\s*dress|midi\s*dress|maxi\s*dress|mini\s*skirt|midi\s*skirt|maxi\s*skirt/.test(n)) return 'Dresses'
   if (/trouser|pant|jeans|skirt|short|legging/.test(n)) return 'Bottoms'
   if (/jacket|coat|blazer|cardigan|vest|puffer/.test(n)) return 'Outerwear'
   if (/bag|tote|clutch|purse|handbag/.test(n)) return 'Bags'
   if (/necklace|earring|ring|bracelet|belt|scarf|hat|glove|sunglass/.test(n)) return 'Accessories'
+  if (/makeup|lipstick|mascara|foundation|concealer|blush|bronzer|primer|brush|serum|moisturi|cleanser|fragrance|perfume|cologne/.test(n)) return 'Beauty'
   if (/shirt|blouse|top|tee|sweater|jumper|knit|cami|tank|bodysuit/.test(n)) return 'Tops'
   return 'Other'
 }

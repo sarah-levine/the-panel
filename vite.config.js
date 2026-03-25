@@ -12,11 +12,13 @@ export default defineConfig({
       input: {
         sidebar: resolve(__dirname, 'src/sidebar/index.html'),
         content: resolve(__dirname, 'src/content/index.js'),
+        intercept: resolve(__dirname, 'src/content/intercept.js'),
         'service-worker': resolve(__dirname, 'src/background/service-worker.js'),
       },
       output: {
         entryFileNames: (chunk) => {
           if (chunk.name === 'content') return 'content/index.js'
+          if (chunk.name === 'intercept') return 'content/intercept.js'
           if (chunk.name === 'service-worker') return 'background/service-worker.js'
           return 'sidebar/[name]-[hash].js'
         },

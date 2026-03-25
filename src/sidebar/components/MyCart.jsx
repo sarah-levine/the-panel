@@ -11,57 +11,8 @@ function groupByCategory(items) {
   }, {})
 }
 
-// Placeholder items for development
-const PLACEHOLDER_ITEMS = [
-  {
-    id: '1',
-    retailer: 'ASOS',
-    name: 'Oversized blazer in camel',
-    price: '$89',
-    category: 'Tops',
-    note: 'For the work trip',
-    isPrivate: false,
-    reactions: { up: 3, down: 0, heart: 2 },
-    commentCount: 4,
-  },
-  {
-    id: '2',
-    retailer: 'Zara',
-    name: 'Wide leg trousers, ecru',
-    price: '$59',
-    category: 'Bottoms',
-    note: '',
-    isPrivate: false,
-    reactions: { up: 1, down: 0, heart: 0 },
-    commentCount: 1,
-  },
-  {
-    id: '3',
-    retailer: '& Other Stories',
-    name: 'Draped satin blouse, ivory',
-    price: '$129',
-    category: 'Tops',
-    note: 'Check if this comes in sage',
-    isPrivate: false,
-    reactions: { up: 5, down: 0, heart: 3 },
-    commentCount: 4,
-  },
-  {
-    id: '4',
-    retailer: 'Reformation',
-    name: 'Cynthia mule, cream',
-    price: '$248',
-    category: 'Shoes',
-    note: '',
-    isPrivate: true,
-    reactions: { up: 0, down: 1, heart: 0 },
-    commentCount: 0,
-  },
-]
-
 export default function MyCart({ items }) {
-  const displayItems = items.length > 0 ? items : PLACEHOLDER_ITEMS
-  const grouped = groupByCategory(displayItems)
+  const grouped = groupByCategory(items)
 
   return (
     <div>
