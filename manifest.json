@@ -7,7 +7,8 @@
   "permissions": [
     "storage",
     "sidePanel",
-    "tabs"
+    "tabs",
+    "scripting"
   ],
 
   "host_permissions": [
@@ -19,7 +20,8 @@
     "https://*.hm.com/*",
     "https://*.madewell.com/*",
     "https://*.freepeople.com/*",
-    "https://*.stories.com/*"
+    "https://*.stories.com/*",
+    "https://*/*"
   ],
 
   "background": {

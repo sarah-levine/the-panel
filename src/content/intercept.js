@@ -17,7 +17,6 @@ window.fetch = function (...args) {
           const ct = res.headers?.get('content-type') || ''
           if (ct.includes('json')) {
             res.clone().json().then(data => {
-              console.log('[The Panel] Intercepted cart fetch:', url)
               document.dispatchEvent(new CustomEvent('__the_panel_cart__', {
                 detail: JSON.stringify({ url, data })
               }))
@@ -42,7 +41,6 @@ XMLHttpRequest.prototype.send = function (...args) {
     try {
       const url = this._thePanelUrl || ''
       if (CART_PATTERNS.some(p => url.toLowerCase().includes(p))) {
-        console.log('[The Panel] Intercepted cart XHR:', url)
         const data = JSON.parse(this.responseText)
         document.dispatchEvent(new CustomEvent('__the_panel_cart__', {
           detail: JSON.stringify({ url, data })

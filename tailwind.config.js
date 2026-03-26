@@ -5,16 +5,17 @@ export default {
     extend: {
       colors: {
         panel: {
-          dark: '#1A1A2E',
-          cream: '#F1EFE8',
-          teal: '#0F6E56',
-          'teal-light': '#E1F5EE',
-          pink: '#D4537E',
-          'pink-light': '#FBEAF0',
+          bg: '#F2EDE4',
+          surface: '#F7F3EC',
+          text: '#4A4035',
+          muted: '#9A8F82',
+          border: '#D6CEBE',
+          accent: '#E8C14A',
         },
       },
       fontFamily: {
-        sans: ['Inter', 'system-ui', 'sans-serif'],
+        sans: ['"DM Sans"', 'system-ui', 'sans-serif'],
+        serif: ['"Instrument Serif"', 'Georgia', 'serif'],
       },
     },
   },

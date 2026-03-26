@@ -34,7 +34,7 @@ function CategoryGroup({ category, items }) {
     <div>
       <button
         onClick={() => setCollapsed(!collapsed)}
-        className="w-full flex items-center justify-between px-4 py-2.5 text-[11px] font-medium uppercase tracking-widest text-gray-400 hover:text-gray-600 transition-colors"
+        className="w-full flex items-center justify-between px-4 py-2.5 text-[11px] font-medium uppercase tracking-widest text-panel-muted hover:text-panel-text transition-colors"
       >
         {category}
         <svg
@@ -54,12 +54,12 @@ function CategoryGroup({ category, items }) {
 function EmptyState() {
   return (
     <div className="flex flex-col items-center justify-center py-16 px-8 text-center">
-      <div className="w-12 h-12 rounded-full bg-gray-50 flex items-center justify-center mb-4">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-gray-300">
+      <div className="w-12 h-12 rounded-full bg-panel-surface flex items-center justify-center mb-4 border border-panel-border/40">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-panel-border">
           <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4zM3 6h18M16 10a4 4 0 01-8 0" strokeLinecap="round" strokeLinejoin="round"/>
         </svg>
       </div>
-      <p className="text-[13px] text-gray-400 leading-relaxed">
+      <p className="text-[13px] text-panel-muted leading-relaxed">
         Visit a supported store and add items to your cart — they'll appear here.
       </p>
     </div>

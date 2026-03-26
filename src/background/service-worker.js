@@ -6,6 +6,92 @@ chrome.action.onClicked.addListener((tab) => {
   chrome.sidePanel.open({ tabId: tab.id })
 })
 
+// Re-categorize existing items on startup (picks up new/changed categories)
+chrome.storage.local.get('cartItems', ({ cartItems }) => {
+  if (!cartItems || cartItems.length === 0) return
+  let changed = false
+  const updated = cartItems.map(item => {
+    const correct = guessCategory(item.name)
+    if (item.category !== correct) {
+      changed = true
+      return { ...item, category: correct }
+    }
+    return item
+  })
+  if (changed) {
+    chrome.storage.local.set({ cartItems: updated })
+  }
+})
+
+// Known retailer hostnames — content script already injected via manifest
+const KNOWN_HOSTS = ['asos', 'zara', 'nordstrom', 'revolve', 'net-a-porter', 'hm.com', 'madewell', 'freepeople', 'stories.com']
+
+function isKnownRetailer(hostname) {
+  return KNOWN_HOSTS.some(h => hostname.includes(h))
+}
+
+// Track which tabs we've already checked/injected for Shopify
+const checkedTabs = new Set()
+
+// On tab update, check if the site is a Shopify store and inject content script
+chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
+  if (changeInfo.status !== 'complete' || !tab.url) return
+  try {
+    const url = new URL(tab.url)
+    if (url.protocol !== 'https:') return
+    if (isKnownRetailer(url.hostname)) return
+
+    const tabKey = `${tabId}-${url.hostname}`
+    if (checkedTabs.has(tabKey)) return
+    checkedTabs.add(tabKey)
+
+    // Probe /cart.js to check if this is a Shopify store
+    const res = await fetch(`${url.origin}/cart.js`, { credentials: 'omit' })
+    if (!res.ok) return
+    const ct = res.headers.get('content-type') || ''
+    if (!ct.includes('json')) return
+    const data = await res.json()
+    if (!data.token || !Array.isArray(data.items)) return
+
+    // It's Shopify — inject content script
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      files: ['dist/content/index.js'],
+    })
+
+    // If there are items in the cart, process them directly
+    if (data.items.length > 0) {
+      const retailerName = url.hostname.replace('www.', '').split('.')[0]
+      const prettyName = retailerName.charAt(0).toUpperCase() + retailerName.slice(1)
+      const items = data.items.map(item => ({
+        name: item.title || item.product_title || '',
+        price: item.price ? '$' + (item.price / 100).toFixed(2) : '',
+        imageUrl: item.image || item.featured_image?.url || '',
+        url: item.url ? `${url.origin}${item.url}` : '',
+        retailer: prettyName,
+      })).filter(i => i.name)
+
+      if (items.length > 0) {
+        handleCartUpdate({
+          retailer: prettyName,
+          items,
+          isFullCart: true,
+          timestamp: Date.now(),
+        })
+      }
+    }
+  } catch (e) {
+    // Not Shopify or network error — silently ignore
+  }
+})
+
+// Clean up checked tabs when they close
+chrome.tabs.onRemoved.addListener((tabId) => {
+  for (const key of checkedTabs) {
+    if (key.startsWith(`${tabId}-`)) checkedTabs.delete(key)
+  }
+})
+
 // Listen for cart data from content scripts
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'CART_ITEMS_FOUND') {
@@ -65,6 +151,8 @@ function guessCategory(name) {
   const n = name.toLowerCase()
   if (/boot|heel|shoe|mule|sneaker|loafer|sandal|flat|pump/.test(n)) return 'Shoes'
   if (/dress|gown|mini\s*dress|midi\s*dress|maxi\s*dress|mini\s*skirt|midi\s*skirt|maxi\s*skirt/.test(n)) return 'Dresses'
+  if (/bikini|swim|one\s*piece|surf|board\s*short|cover\s*up|rash\s*guard/.test(n)) return 'Swim'
+  if (/bra|bralette|underwear|panty|pantie|thong|lingerie|bodysuit|corset|slip\s*dress|robe|pajama|pyjama|sleepwear|nightgown|lounge/.test(n)) return 'Intimates'
   if (/trouser|pant|jeans|skirt|short|legging/.test(n)) return 'Bottoms'
   if (/jacket|coat|blazer|cardigan|vest|puffer/.test(n)) return 'Outerwear'
   if (/bag|tote|clutch|purse|handbag/.test(n)) return 'Bags'

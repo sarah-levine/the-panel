@@ -51,33 +51,28 @@ export default function App() {
   }, [])
 
   return (
-    <div className="flex flex-col h-screen bg-white">
+    <div className="flex flex-col h-screen bg-panel-bg">
 
       {/* Header */}
-      <div className="border-b border-gray-100">
-        <div className="flex items-center justify-between px-4 py-3">
-          <span className="text-[15px] font-medium tracking-tight text-[#1A1A2E]">
-            The Panel
-          </span>
-          <div className="flex items-center gap-3">
-            {/* Notification bell */}
-            <button
-              onClick={() => setShowNotifications(!showNotifications)}
-              className="relative w-7 h-7 flex items-center justify-center rounded-full hover:bg-gray-50 transition-colors"
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-gray-500">
-                <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 01-3.46 0" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-              {unreadCount > 0 && (
-                <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-[#D4537E] text-white text-[9px] font-medium rounded-full flex items-center justify-center">
-                  {unreadCount}
-                </span>
-              )}
-            </button>
-            {/* Avatar */}
-            <div className="w-7 h-7 rounded-full bg-[#E1F5EE] flex items-center justify-center text-[10px] font-medium text-[#085041]">
-              JL
-            </div>
+      <div className="border-b border-panel-border bg-panel-surface">
+        <div className="flex items-center justify-end px-4 py-2 gap-3">
+          {/* Notification bell */}
+          <button
+            onClick={() => setShowNotifications(!showNotifications)}
+            className="relative w-7 h-7 flex items-center justify-center rounded-full hover:bg-panel-bg transition-colors"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-panel-muted">
+              <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 01-3.46 0" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+            {unreadCount > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-panel-accent text-panel-text text-[9px] font-medium rounded-full flex items-center justify-center">
+                {unreadCount}
+              </span>
+            )}
+          </button>
+          {/* Avatar */}
+          <div className="w-7 h-7 rounded-full bg-panel-accent/20 flex items-center justify-center text-[10px] font-medium text-panel-text">
+            JL
           </div>
         </div>
 
@@ -87,8 +82,8 @@ export default function App() {
             onClick={() => setActiveTab('cart')}
             className={`flex-1 text-center text-[13px] py-2 border-b-2 transition-colors ${
               activeTab === 'cart'
-                ? 'border-[#1A1A2E] text-[#1A1A2E] font-medium'
-                : 'border-transparent text-gray-400 hover:text-gray-600'
+                ? 'border-panel-text text-panel-text font-medium'
+                : 'border-transparent text-panel-muted hover:text-panel-text'
             }`}
           >
             My cart
@@ -97,12 +92,12 @@ export default function App() {
             onClick={() => setActiveTab('friends')}
             className={`flex-1 text-center text-[13px] py-2 border-b-2 transition-colors ${
               activeTab === 'friends'
-                ? 'border-[#1A1A2E] text-[#1A1A2E] font-medium'
-                : 'border-transparent text-gray-400 hover:text-gray-600'
+                ? 'border-panel-text text-panel-text font-medium'
+                : 'border-transparent text-panel-muted hover:text-panel-text'
             }`}
           >
             Friends
-            <span className="ml-1.5 w-1.5 h-1.5 rounded-full bg-[#D4537E] inline-block align-middle" />
+            <span className="ml-1.5 w-1.5 h-1.5 rounded-full bg-panel-accent inline-block align-middle" />
           </button>
         </div>
       </div>
