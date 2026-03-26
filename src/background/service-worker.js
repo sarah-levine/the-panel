@@ -1,7 +1,9 @@
 // Background service worker
 // Aggregates cart data from content scripts, manages storage, opens sidebar
 
-import { signInWithGoogle, getAuthState, signOut } from './auth.js'
+import { signInWithGoogle, getAuthState, getAuthToken, signOut } from './auth.js'
+
+const API_URL = 'http://localhost:3001'
 
 // Open sidebar when extension icon is clicked
 chrome.action.onClicked.addListener((tab) => {
@@ -47,43 +49,26 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
     if (checkedTabs.has(tabKey)) return
     checkedTabs.add(tabKey)
 
-    // Probe /cart.js to check if this is a Shopify store
-    const res = await fetch(`${url.origin}/cart.js`, { credentials: 'omit' })
-    if (!res.ok) return
-    const ct = res.headers.get('content-type') || ''
-    if (!ct.includes('json')) return
-    const data = await res.json()
-    if (!data.token || !Array.isArray(data.items)) return
+    console.log('[The Panel] Checking Shopify for', url.hostname)
 
-    // It's Shopify — inject content script
+    // Check if the page is a Shopify store (run in MAIN world to access window.Shopify)
+    const [{ result: shopifyDetected }] = await chrome.scripting.executeScript({
+      target: { tabId },
+      world: 'MAIN',
+      func: () => !!(window.Shopify || document.querySelector('script[src*="cdn.shopify.com"]')),
+    })
+    console.log('[The Panel] Shopify detected:', shopifyDetected, 'for', url.hostname)
+    if (!shopifyDetected) return
+
+    // It's Shopify — inject content script (it will read /cart.js with cookies)
+    console.log('[The Panel] Injecting content script on', url.hostname)
     await chrome.scripting.executeScript({
       target: { tabId },
       files: ['dist/content/index.js'],
     })
-
-    // If there are items in the cart, process them directly
-    if (data.items.length > 0) {
-      const retailerName = url.hostname.replace('www.', '').split('.')[0]
-      const prettyName = retailerName.charAt(0).toUpperCase() + retailerName.slice(1)
-      const items = data.items.map(item => ({
-        name: item.title || item.product_title || '',
-        price: item.price ? '$' + (item.price / 100).toFixed(2) : '',
-        imageUrl: item.image || item.featured_image?.url || '',
-        url: item.url ? `${url.origin}${item.url}` : '',
-        retailer: prettyName,
-      })).filter(i => i.name)
-
-      if (items.length > 0) {
-        handleCartUpdate({
-          retailer: prettyName,
-          items,
-          isFullCart: true,
-          timestamp: Date.now(),
-        })
-      }
-    }
+    console.log('[The Panel] Content script injected on', url.hostname)
   } catch (e) {
-    // Not Shopify or network error — silently ignore
+    console.log('[The Panel] Shopify check error for', tab.url, e.message)
   }
 })
 
@@ -120,6 +105,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     getAuthState()
       .then(user => sendResponse({ user }))
       .catch(() => sendResponse({ user: null }))
+    return true
+  }
+
+  if (message.type === 'GET_AUTH_TOKEN') {
+    getAuthToken()
+      .then(token => sendResponse({ token }))
+      .catch(() => sendResponse({ token: null }))
     return true
   }
 
@@ -160,6 +152,23 @@ async function handleCartUpdate({ retailer, items, isFullCart, timestamp }) {
   chrome.runtime.sendMessage({ type: 'CART_UPDATED', items: merged }).catch(() => {
     // Sidebar not open — that's fine
   })
+
+  // Sync to backend (fire-and-forget)
+  syncCartToServer(merged)
+}
+
+async function syncCartToServer(items) {
+  const token = await getAuthToken()
+  if (!token) return
+  try {
+    await fetch(`${API_URL}/items/sync`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ items }),
+    })
+  } catch (e) {
+    // Offline or server down — local cart still works
+  }
 }
 
 function generateId(item) {

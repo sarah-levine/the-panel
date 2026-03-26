@@ -74,9 +74,15 @@ export const RETAILERS = [
   },
 ]
 
-// Detect Shopify stores by checking for the Shopify global or /cart.js endpoint
+// Detect Shopify stores via DOM (content scripts run in isolated world, can't see window.Shopify)
 export function isShopify() {
-  return !!(window.Shopify || document.querySelector('script[src*="cdn.shopify.com"]'))
+  return !!(
+    document.querySelector('script[src*="cdn.shopify.com"]') ||
+    document.querySelector('link[href*="cdn.shopify.com"]') ||
+    document.querySelector('meta[name="shopify-checkout-api-token"]') ||
+    document.querySelector('#shopify-features') ||
+    document.querySelector('[data-shopify]')
+  )
 }
 
 export function getRetailer(hostname) {

@@ -603,4 +603,60 @@ function init(retailer) {
 // ─── Start ───────────────────────────────────────────────────────────────────
 
 const retailer = getRetailer(window.location.hostname)
-if (retailer) init(retailer)
+if (retailer) {
+  init(retailer)
+} else {
+  // Not a known retailer — try Shopify detection, then try /cart.js as last resort
+  if (isShopify()) {
+    initShopify()
+  } else {
+    // The service worker may have injected us because it detected Shopify via MAIN world
+    // Try fetching /cart.js to confirm — this runs with page cookies
+    tryShopifyFallback()
+  }
+}
+
+async function tryShopifyFallback() {
+  try {
+    const res = await fetch('/cart.js', { credentials: 'same-origin' })
+    if (!res.ok) return
+    const data = await res.json()
+    if (data && Array.isArray(data.items)) {
+      initShopify()
+    }
+  } catch (e) {
+    // Not Shopify
+  }
+}
+
+// ─── Shopify auto-init (for stores not in retailers list) ────────────────
+
+function initShopify() {
+  const hostname = window.location.hostname.replace('www.', '')
+  const name = hostname.split('.')[0]
+  const prettyName = name.charAt(0).toUpperCase() + name.slice(1)
+
+  activeRetailer = { name: prettyName, matches: () => true }
+
+  async function syncShopifyCart() {
+    const items = await parseShopifyCart()
+    if (items.length > 0) {
+      sendCartUpdate(
+        items.map(i => ({ ...i, retailer: prettyName })),
+        prettyName,
+        { isFullCart: true }
+      )
+    }
+  }
+
+  // Initial sync
+  syncShopifyCart()
+
+  // Re-sync after add-to-cart clicks
+  document.addEventListener('click', (e) => {
+    const btn = e.target.closest('button, [type="submit"], [role="button"]')
+    if (!btn || !isAddToCartButton(btn)) return
+    setTimeout(syncShopifyCart, 1500)
+    setTimeout(syncShopifyCart, 3000)
+  }, true)
+}

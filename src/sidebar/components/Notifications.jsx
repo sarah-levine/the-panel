@@ -1,12 +1,24 @@
-export default function Notifications({ notifications, onClose, onMarkAllRead }) {
-  const PLACEHOLDER = [
-    { id: 1, type: 'comment', read: false, avatar: 'MK', color: 'bg-panel-accent/20 text-panel-text', text: 'Maya commented on your item — "Ok this is SO good"', time: '2 min ago' },
-    { id: 2, type: 'reaction', read: false, avatar: 'SR', color: 'bg-panel-surface text-panel-text', text: 'Sofia and 2 others upvoted your draped satin blouse', time: '14 min ago' },
-    { id: 3, type: 'friend', read: false, avatar: 'AL', color: 'bg-panel-accent/30 text-panel-text', text: 'Amara saved your platform ankle boots to her cart', time: '1h ago' },
-    { id: 4, type: 'friend', read: true, avatar: 'NP', color: 'bg-panel-surface text-panel-text', text: 'Nia accepted your invite and joined The Panel', time: '3h ago' },
-  ]
+import { useState, useEffect } from 'react'
+import { apiFetch } from '../hooks/useApi'
 
-  const items = notifications.length > 0 ? notifications : PLACEHOLDER
+export default function Notifications({ onClose, onMarkAllRead }) {
+  const [items, setItems] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    apiFetch('/notifications')
+      .then(setItems)
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [])
+
+  async function markAllRead() {
+    try {
+      await apiFetch('/notifications/mark-read', { method: 'POST' })
+      setItems(prev => prev.map(n => ({ ...n, read: true })))
+      onMarkAllRead()
+    } catch (e) {}
+  }
 
   return (
     <div className="absolute inset-0 z-10 bg-panel-bg flex flex-col">
@@ -17,27 +29,53 @@ export default function Notifications({ notifications, onClose, onMarkAllRead })
           </button>
           <span className="text-[14px] font-medium text-panel-text">Notifications</span>
         </div>
-        <button onClick={onMarkAllRead} className="text-[11px] text-panel-accent hover:opacity-70 transition-opacity font-medium">
+        <button onClick={markAllRead} className="text-[11px] text-panel-accent hover:opacity-70 transition-opacity font-medium">
           Mark all read
         </button>
       </div>
 
       <div className="flex-1 overflow-y-auto">
-        {items.map(n => (
-          <div key={n.id} className={`flex gap-3 px-4 py-3 border-b border-panel-border/50 ${!n.read ? 'bg-panel-surface' : ''}`}>
-            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-[11px] font-medium flex-shrink-0 ${n.color}`}>
-              {n.avatar}
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-[12px] text-panel-text leading-snug mb-0.5">{n.text}</p>
-              <p className="text-[10px] text-panel-muted">{n.time}</p>
-            </div>
-            {!n.read && (
-              <div className="w-1.5 h-1.5 rounded-full bg-panel-accent flex-shrink-0 mt-1.5" />
-            )}
+        {loading ? (
+          <div className="flex justify-center py-12"><div className="w-6 h-6 rounded-full bg-panel-accent animate-pulse" /></div>
+        ) : items.length === 0 ? (
+          <div className="flex items-center justify-center py-16">
+            <p className="text-[13px] text-panel-muted">No notifications yet</p>
           </div>
-        ))}
+        ) : (
+          items.map(n => {
+            const initials = n.actor?.displayName
+              ? n.actor.displayName.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
+              : '?'
+            return (
+              <div key={n.id} className={`flex gap-3 px-4 py-3 border-b border-panel-border/50 ${!n.read ? 'bg-panel-surface' : ''}`}>
+                <div className="w-8 h-8 rounded-full bg-panel-accent/20 flex items-center justify-center text-[11px] font-medium flex-shrink-0 text-panel-text overflow-hidden">
+                  {n.actor?.avatarUrl ? (
+                    <img src={n.actor.avatarUrl} alt="" className="w-full h-full object-cover" />
+                  ) : initials}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[12px] text-panel-text leading-snug mb-0.5">{n.body}</p>
+                  <p className="text-[10px] text-panel-muted">{getTimeAgo(n.createdAt)}</p>
+                </div>
+                {!n.read && (
+                  <div className="w-1.5 h-1.5 rounded-full bg-panel-accent flex-shrink-0 mt-1.5" />
+                )}
+              </div>
+            )
+          })
+        )}
       </div>
     </div>
   )
+}
+
+function getTimeAgo(dateStr) {
+  const diff = Date.now() - new Date(dateStr).getTime()
+  const mins = Math.floor(diff / 60000)
+  if (mins < 1) return 'just now'
+  if (mins < 60) return `${mins}m ago`
+  const hrs = Math.floor(mins / 60)
+  if (hrs < 24) return `${hrs}h ago`
+  const days = Math.floor(hrs / 24)
+  return `${days}d ago`
 }

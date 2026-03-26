@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react'
 import { AuthProvider, useAuth } from './hooks/useAuth.jsx'
+import { apiFetch } from './hooks/useApi'
 import AuthScreen from './components/AuthScreen'
 import MyCart from './components/MyCart'
 import FriendsFeed from './components/FriendsFeed'
 import Notifications from './components/Notifications'
+import InviteFriends from './components/InviteFriends'
 
 export default function App() {
   return (
@@ -17,20 +19,16 @@ function AppContent() {
   const { user, isLoading, signOut } = useAuth()
   const [activeTab, setActiveTab] = useState('cart')
   const [cartItems, setCartItems] = useState([])
-  const [notifications, setNotifications] = useState([])
   const [unreadCount, setUnreadCount] = useState(0)
   const [showNotifications, setShowNotifications] = useState(false)
+  const [showInvite, setShowInvite] = useState(false)
 
   // Load cart items from chrome.storage on mount and listen for changes
   useEffect(() => {
     if (typeof chrome === 'undefined' || !chrome.storage) return
 
-    chrome.storage.local.get(['cartItems', 'notifications'], (result) => {
+    chrome.storage.local.get('cartItems', (result) => {
       if (result.cartItems) setCartItems(result.cartItems)
-      if (result.notifications) {
-        setNotifications(result.notifications)
-        setUnreadCount(result.notifications.filter(n => !n.read).length)
-      }
     })
 
     function onMessage(message) {
@@ -44,11 +42,6 @@ function AppContent() {
       if (changes.cartItems) {
         setCartItems(changes.cartItems.newValue || [])
       }
-      if (changes.notifications) {
-        const updated = changes.notifications.newValue || []
-        setNotifications(updated)
-        setUnreadCount(updated.filter(n => !n.read).length)
-      }
     }
     chrome.storage.onChanged.addListener(onStorageChanged)
 
@@ -57,6 +50,19 @@ function AppContent() {
       chrome.storage.onChanged.removeListener(onStorageChanged)
     }
   }, [])
+
+  // Fetch unread notification count from API
+  useEffect(() => {
+    if (!user) return
+    function fetchUnread() {
+      apiFetch('/notifications/unread-count')
+        .then(data => setUnreadCount(data.count))
+        .catch(() => {})
+    }
+    fetchUnread()
+    const interval = setInterval(fetchUnread, 30000)
+    return () => clearInterval(interval)
+  }, [user])
 
   // Loading state
   if (isLoading) {
@@ -140,20 +146,32 @@ function AppContent() {
       {/* Notification panel overlay */}
       {showNotifications && (
         <Notifications
-          notifications={notifications}
           onClose={() => setShowNotifications(false)}
-          onMarkAllRead={() => {
-            const updated = notifications.map(n => ({ ...n, read: true }))
-            setNotifications(updated)
-            setUnreadCount(0)
-          }}
+          onMarkAllRead={() => setUnreadCount(0)}
         />
+      )}
+
+      {/* Invite friends overlay */}
+      {showInvite && (
+        <InviteFriends onClose={() => setShowInvite(false)} />
       )}
 
       {/* Tab content */}
       <div className="flex-1 overflow-y-auto">
         {activeTab === 'cart' && <MyCart items={cartItems} />}
-        {activeTab === 'friends' && <FriendsFeed />}
+        {activeTab === 'friends' && (
+          <div>
+            <div className="px-4 py-3 border-b border-panel-border/50">
+              <button
+                onClick={() => setShowInvite(true)}
+                className="w-full bg-panel-accent text-panel-text rounded-full py-2 text-[13px] font-medium hover:opacity-90 transition-opacity"
+              >
+                Invite Friends
+              </button>
+            </div>
+            <FriendsFeed />
+          </div>
+        )}
       </div>
 
     </div>
