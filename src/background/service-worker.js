@@ -1,6 +1,8 @@
 // Background service worker
 // Aggregates cart data from content scripts, manages storage, opens sidebar
 
+import { signInWithGoogle, getAuthState, signOut } from './auth.js'
+
 // Open sidebar when extension icon is clicked
 chrome.action.onClicked.addListener((tab) => {
   chrome.sidePanel.open({ tabId: tab.id })
@@ -92,12 +94,35 @@ chrome.tabs.onRemoved.addListener((tabId) => {
   }
 })
 
-// Listen for cart data from content scripts
+// Listen for messages from content scripts and sidebar
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'CART_ITEMS_FOUND') {
     handleCartUpdate(message)
     sendResponse({ ok: true })
   }
+
+  // Auth messages from sidebar
+  if (message.type === 'SIGN_IN') {
+    signInWithGoogle()
+      .then(user => sendResponse({ ok: true, user }))
+      .catch(err => sendResponse({ ok: false, error: err.message }))
+    return true // keep channel open for async response
+  }
+
+  if (message.type === 'SIGN_OUT') {
+    signOut()
+      .then(() => sendResponse({ ok: true }))
+      .catch(err => sendResponse({ ok: false, error: err.message }))
+    return true
+  }
+
+  if (message.type === 'GET_AUTH_STATE') {
+    getAuthState()
+      .then(user => sendResponse({ user }))
+      .catch(() => sendResponse({ user: null }))
+    return true
+  }
+
   return true
 })
 

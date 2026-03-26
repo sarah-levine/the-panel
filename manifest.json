@@ -8,8 +8,14 @@
     "storage",
     "sidePanel",
     "tabs",
-    "scripting"
+    "scripting",
+    "identity"
   ],
+
+  "oauth2": {
+    "client_id": "217387451930-l24tre78kg9jv5u024sn0vdejshu5iek.apps.googleusercontent.com",
+    "scopes": ["openid", "email", "profile"]
+  },
 
   "host_permissions": [
     "https://*.asos.com/*",

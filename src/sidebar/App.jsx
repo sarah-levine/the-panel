@@ -1,9 +1,20 @@
 import { useState, useEffect } from 'react'
+import { AuthProvider, useAuth } from './hooks/useAuth.jsx'
+import AuthScreen from './components/AuthScreen'
 import MyCart from './components/MyCart'
 import FriendsFeed from './components/FriendsFeed'
 import Notifications from './components/Notifications'
 
 export default function App() {
+  return (
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
+  )
+}
+
+function AppContent() {
+  const { user, isLoading, signOut } = useAuth()
   const [activeTab, setActiveTab] = useState('cart')
   const [cartItems, setCartItems] = useState([])
   const [notifications, setNotifications] = useState([])
@@ -14,7 +25,6 @@ export default function App() {
   useEffect(() => {
     if (typeof chrome === 'undefined' || !chrome.storage) return
 
-    // Initial load
     chrome.storage.local.get(['cartItems', 'notifications'], (result) => {
       if (result.cartItems) setCartItems(result.cartItems)
       if (result.notifications) {
@@ -23,7 +33,6 @@ export default function App() {
       }
     })
 
-    // Listen for runtime messages (direct push from service worker)
     function onMessage(message) {
       if (message.type === 'CART_UPDATED') {
         setCartItems(message.items)
@@ -31,7 +40,6 @@ export default function App() {
     }
     chrome.runtime.onMessage.addListener(onMessage)
 
-    // Listen for storage changes (catches updates even if runtime message is missed)
     function onStorageChanged(changes) {
       if (changes.cartItems) {
         setCartItems(changes.cartItems.newValue || [])
@@ -49,6 +57,25 @@ export default function App() {
       chrome.storage.onChanged.removeListener(onStorageChanged)
     }
   }, [])
+
+  // Loading state
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-panel-bg">
+        <div className="w-8 h-8 rounded-full bg-panel-accent animate-pulse" />
+      </div>
+    )
+  }
+
+  // Not signed in
+  if (!user) {
+    return <AuthScreen />
+  }
+
+  // User initials for avatar
+  const initials = user.displayName
+    ? user.displayName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()
+    : user.email[0].toUpperCase()
 
   return (
     <div className="flex flex-col h-screen bg-panel-bg">
@@ -71,9 +98,17 @@ export default function App() {
             )}
           </button>
           {/* Avatar */}
-          <div className="w-7 h-7 rounded-full bg-panel-accent/20 flex items-center justify-center text-[10px] font-medium text-panel-text">
-            JL
-          </div>
+          <button
+            onClick={signOut}
+            title="Sign out"
+            className="w-7 h-7 rounded-full bg-panel-accent/20 flex items-center justify-center text-[10px] font-medium text-panel-text overflow-hidden"
+          >
+            {user.avatarUrl ? (
+              <img src={user.avatarUrl} alt={user.displayName} className="w-full h-full object-cover" />
+            ) : (
+              initials
+            )}
+          </button>
         </div>
 
         {/* Tabs */}
