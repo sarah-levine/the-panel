@@ -53,12 +53,12 @@ function isVisible(el) {
 
 // ─── Non-product name blocklist ──────────────────────────────────────────────
 
-const NAME_BLOCKLIST = /^(promo\s*code|coupon|gift\s*card|order\s*summary|sub\s*total|shipping|estimated\s*tax|proceed|checkout|pay\s*with|total|added\s*to|view\s*bag|continue\s*shopping|shop\s*now|free\s*shipping|sign\s*up|get\s*\$|product\s*highlights|product\s*details|size\s*guide|you\s*may\s*also|recently\s*viewed|customers\s*also|reviews|write\s*a\s*review|top\s*rated|members\s*get|earn\s*\d|free\s*returns|\d+%\s*of\s*net|questions\s*about|chat\s*with|expected\s*to\s*ship|available\s*on\s*orders)/i
+const NAME_BLOCKLIST = /^(promo\s*code|coupon|gift\s*card|order\s*summary|sub\s*total|shipping|estimated\s*tax|proceed|checkout|pay\s*with|total|added\s*to|view\s*bag|continue\s*shopping|shop\s*now|free\s*shipping|sign\s*up|get\s*\$|product\s*highlights|product\s*details|size\s*guide|you\s*may\s*also|recently\s*viewed|customers\s*also|reviews|write\s*a\s*review|top\s*rated|members\s*get|earn\s*\d|free\s*returns|\d+%\s*of\s*net|questions\s*about|chat\s*with|expected\s*to\s*ship|available\s*on\s*orders|skip\s*to|looking\s*for\s*this|your\s*bag\s*is|main\s*content|cookie|accept\s*all|privacy\s*policy)/i
 
 // ─── Generic cart page parser ────────────────────────────────────────────────
 
 const PRODUCT_LINK_PATTERNS = /\/(shop|product|prd|p|s|item|pd)\//i
-const RECO_SECTION = '[class*="recommend"], [class*="recently"], [class*="you-may"], [class*="upsell"], [class*="also-like"], [class*="picked-for"], [class*="PickedForYou"]'
+const RECO_SECTION = '[class*="recommend"], [class*="recently"], [class*="you-may"], [class*="upsell"], [class*="also-like"], [class*="picked-for"], [class*="PickedForYou"], [class*="looking-for"], [class*="LookingFor"], [class*="suggestions"], [class*="empty-cart"]'
 
 function parseCartPage() {
   // Strategy 0: Shopify /cart.js — most reliable when available
@@ -454,9 +454,8 @@ function watchCartPage(retailerName) {
 
     // Fall back to DOM parsing
     const items = parseCartPage().map(i => ({ ...i, retailer: retailerName }))
-    if (items.length > 0) {
-      sendCartUpdate(items, retailerName, { isFullCart: true })
-    }
+    // Always send update on cart pages (even empty) to clear stale items
+    sendCartUpdate(items, retailerName, { isFullCart: true })
   }
 
   parse()
@@ -603,33 +602,39 @@ function init(retailer) {
 // ─── Start ───────────────────────────────────────────────────────────────────
 
 const retailer = getRetailer(window.location.hostname)
+console.log('[The Panel] Content script start —', window.location.hostname, 'retailer:', retailer?.name, 'isShopify:', isShopify())
 if (retailer) {
   init(retailer)
 } else {
-  // Not a known retailer — try Shopify detection, then try /cart.js as last resort
-  if (isShopify()) {
-    initShopify()
-  } else {
-    // The service worker may have injected us because it detected Shopify via MAIN world
-    // Try fetching /cart.js to confirm — this runs with page cookies
-    tryShopifyFallback()
-  }
+  // Try Shopify — /cart.js first, then DOM parsing fallback
+  console.log('[The Panel] Not a known retailer, trying Shopify detection')
+  tryShopifyAuto()
 }
 
-async function tryShopifyFallback() {
+async function tryShopifyAuto() {
   try {
     const res = await fetch('/cart.js', { credentials: 'same-origin' })
-    if (!res.ok) return
+    console.log('[The Panel] /cart.js response:', res.status)
+    if (!res.ok) {
+      console.log('[The Panel] /cart.js not available, using DOM parsing')
+      initShopifyDOM()
+      return
+    }
     const data = await res.json()
-    if (data && Array.isArray(data.items)) {
+    if (data && Array.isArray(data.items) && data.items.length > 0) {
+      console.log('[The Panel] /cart.js has', data.items.length, 'items, using API')
       initShopify()
+    } else {
+      console.log('[The Panel] /cart.js empty or invalid, using DOM parsing')
+      initShopifyDOM()
     }
   } catch (e) {
-    // Not Shopify
+    console.log('[The Panel] /cart.js fetch error, using DOM parsing')
+    initShopifyDOM()
   }
 }
 
-// ─── Shopify auto-init (for stores not in retailers list) ────────────────
+// ─── Shopify /cart.js init (standard Shopify stores) ─────────────────────
 
 function initShopify() {
   const hostname = window.location.hostname.replace('www.', '')
@@ -649,14 +654,106 @@ function initShopify() {
     }
   }
 
-  // Initial sync
   syncShopifyCart()
 
-  // Re-sync after add-to-cart clicks
   document.addEventListener('click', (e) => {
     const btn = e.target.closest('button, [type="submit"], [role="button"]')
     if (!btn || !isAddToCartButton(btn)) return
     setTimeout(syncShopifyCart, 1500)
     setTimeout(syncShopifyCart, 3000)
   }, true)
+}
+
+// ─── Shopify DOM init (headless Shopify stores where /cart.js is 404) ────
+
+function initShopifyDOM() {
+  console.log('[The Panel] initShopifyDOM running')
+  const hostname = window.location.hostname.replace('www.', '')
+  const name = hostname.split('.')[0]
+  const prettyName = name.charAt(0).toUpperCase() + name.slice(1)
+
+  activeRetailer = { name: prettyName, matches: () => true }
+
+  function parseCartDrawer() {
+    const items = []
+    const seen = new Set()
+
+    // Find all product links in the page (Shopify uses /products/ URLs)
+    const productLinks = document.querySelectorAll('a[href*="/products/"]')
+    for (const link of productLinks) {
+      // Skip links outside cart-like containers
+      const container = link.closest('aside, [class*="cart"], [class*="drawer"], [role="dialog"]')
+      if (!container) continue
+
+      // Get product name from aria-label, link text, or nearby text
+      let itemName = ''
+      const ariaLabel = link.getAttribute('aria-label') || ''
+      if (ariaLabel.startsWith('View ')) {
+        itemName = ariaLabel.slice(5)
+      } else {
+        itemName = link.textContent?.trim() || ''
+      }
+
+      if (!itemName || itemName.length < 3 || seen.has(itemName)) continue
+      if (NAME_BLOCKLIST.test(itemName)) continue
+
+      // Walk up to find the item row (usually an <li> or a grid container)
+      let row = link.closest('li, [class*="item"], [class*="grid"]')
+      if (!row) row = link.parentElement?.parentElement
+
+      // Get image
+      const img = (link.querySelector('img') || row?.querySelector('img'))
+      const imgSrc = img ? (img.currentSrc || img.src || img.dataset.src || '') : ''
+
+      // Get price from the row
+      let price = ''
+      if (row) {
+        const priceMatch = row.textContent.match(PRICE_RE)
+        if (priceMatch) price = priceMatch[0]
+      }
+
+      // Get product URL
+      const url = link.href || ''
+
+      seen.add(itemName)
+      items.push({ name: itemName, price, imageUrl: imgSrc, url })
+    }
+
+    return items
+  }
+
+  function syncDrawer() {
+    const items = parseCartDrawer()
+    console.log('[The Panel] syncDrawer found', items.length, 'items')
+    if (items.length > 0) {
+      sendCartUpdate(
+        items.map(i => ({ ...i, retailer: prettyName })),
+        prettyName,
+        { isFullCart: true }
+      )
+    }
+  }
+
+  // Watch for cart drawer appearing/changing
+  let debounce = null
+  const observer = new MutationObserver(() => {
+    // Only parse if there's a visible cart-like container
+    const drawer = document.querySelector('aside, [class*="cart-drawer"], [class*="CartDrawer"], [role="dialog"]')
+    if (drawer && isVisible(drawer)) {
+      clearTimeout(debounce)
+      debounce = setTimeout(syncDrawer, 500)
+    }
+  })
+  observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class', 'style'] })
+
+  // Also sync on add-to-cart clicks
+  document.addEventListener('click', (e) => {
+    const btn = e.target.closest('button, [type="submit"], [role="button"]')
+    if (!btn || !isAddToCartButton(btn)) return
+    setTimeout(syncDrawer, 1500)
+    setTimeout(syncDrawer, 3000)
+  }, true)
+
+  // Try an initial parse in case the drawer is already open
+  syncDrawer()
 }
