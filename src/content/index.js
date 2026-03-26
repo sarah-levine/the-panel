@@ -443,6 +443,13 @@ function watchCartPage(retailerName) {
       return
     }
 
+    // Check if the page explicitly says the cart is empty
+    const bodyText = document.body.textContent || ''
+    if (/your (bag|cart|basket) is empty/i.test(bodyText)) {
+      sendCartUpdate([], retailerName, { isFullCart: true })
+      return
+    }
+
     // Try Shopify /cart.js first (most reliable)
     if (isShopify()) {
       const shopifyItems = await parseShopifyCart()
